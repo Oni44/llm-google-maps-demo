@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LLM → Google Maps Demo</title>
+
+    <style>
+        :root {
+            --bg: #0b1220;
+            --panel: #101a2f;
+            --panel2: #0f1930;
+            --text: #e8eefc;
+            --muted: #a9b7d0;
+            --border: rgba(255, 255, 255, .10);
+            --accent: #6ea8fe;
+            --danger: #ff6b6b;
+            --success: #41d39e;
+            --shadow: 0 14px 40px rgba(0, 0, 0, .35);
+            --radius: 14px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            background: radial-gradient(1200px 700px at 20% 10%, rgba(110, 168, 254, .18), transparent 55%),
+                radial-gradient(900px 600px at 90% 20%, rgba(65, 211, 158, .12), transparent 55%),
+                var(--bg);
+            color: var(--text);
+        }
+
+        .app {
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            gap: 18px;
+            padding: 18px;
+            min-height: 100vh;
+        }
+
+        @media (max-width: 980px) {
+            .app {
+                grid-template-columns: 1fr;
+            }
+
+            .mapCard iframe {
+                height: 60vh;
+            }
+        }
+
+        .card {
+            background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .02));
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .cardHeader {
+            padding: 14px 14px 10px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(255, 255, 255, .02);
+        }
+
+        .title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: .2px;
+        }
+
+        .badge {
+            font-size: 12px;
+            color: var(--muted);
+            border: 1px solid var(--border);
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .02);
+        }
+
+        .cardBody {
+            padding: 14px;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+            margin: 10px 0 6px;
+        }
+
+        input,
+        select,
+        button {
+            width: 100%;
+            padding: 11px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, .03);
+            color: var(--text);
+            outline: none;
+        }
+
+        input::placeholder {
+            color: rgba(233, 238, 252, .45);
+        }
+
+        /* Dropdown dark mode fix */
+        select,
+        option {
+            background-color: #0f172a;
+            /* dark navy */
+            color: #e5e7eb;
+            /* light text */
+        }
+
+        select:focus {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
+        }
+
+        /* Optional: make dropdown look consistent */
+        select {
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 10px;
+            padding: 10px;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .btn {
+            cursor: pointer;
+            background: linear-gradient(180deg, rgba(110, 168, 254, .92), rgba(110, 168, 254, .75));
+            border: 1px solid rgba(110, 168, 254, .35);
+            color: #0b1220;
+            font-weight: 700;
+            transition: transform .06s ease, filter .2s ease;
+        }
+
+        .btn:hover {
+            filter: brightness(1.05);
+        }
+
+        .btn:active {
+            transform: translateY(1px);
+        }
+
+        .btn:disabled {
+            cursor: not-allowed;
+            filter: grayscale(0.2) brightness(0.85);
+            opacity: .75;
+        }
+
+        .hint {
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .alert {
+            margin-top: 12px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 107, 107, .35);
+            background: rgba(255, 107, 107, .10);
+            color: #ffd1d1;
+            display: none;
+            white-space: pre-wrap;
+            font-size: 12px;
+        }
+
+        .status {
+            margin-top: 12px;
+            font-size: 12px;
+            color: var(--muted);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .25);
+        }
+
+        .dot.loading {
+            background: var(--accent);
+            box-shadow: 0 0 0 6px rgba(110, 168, 254, .12);
+        }
+
+        .dot.ok {
+            background: var(--success);
+            box-shadow: 0 0 0 6px rgba(65, 211, 158, .12);
+        }
+
+        .dot.err {
+            background: var(--danger);
+            box-shadow: 0 0 0 6px rgba(255, 107, 107, .12);
+        }
+
+        .list {
+            margin-top: 14px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: auto;
+            max-height: 55vh;
+            background: rgba(0, 0, 0, .10);
+        }
+
+        .empty {
+            padding: 12px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .item {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+        }
+
+        .item:last-child {
+            border-bottom: none;
+        }
+
+        .itemTop {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .itemTitle {
+            margin: 0;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .itemMeta {
+            margin-top: 6px;
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.35;
+        }
+
+        .pill {
+            font-size: 11px;
+            color: var(--muted);
+            border: 1px solid var(--border);
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .02);
+            flex: 0 0 auto;
+            height: fit-content;
+        }
+
+        .links {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .active {
+            background: rgba(110, 168, 254, .10);
+            outline: 1px solid rgba(110, 168, 254, .25);
+        }
+
+        .mapCard iframe {
+            width: 100%;
+            height: calc(100vh - 120px);
+            border: 0;
+            display: block;
+            background: rgba(0, 0, 0, .18);
+        }
+
+        .mapHeaderRow {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(255, 255, 255, .02);
+        }
+
+        .mapTitle {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 800;
+        }
+
+        .mapSub {
+            font-size: 12px;
+            color: var(--muted);
+            margin-left: 8px;
+            font-weight: 500;
+        }
+
+        .mapActions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .miniBtn {
+            padding: 8px 10px;
+            font-size: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, .03);
+            color: var(--text);
+            cursor: pointer;
+            width: auto;
+        }
+
+        .miniBtn:hover {
+            filter: brightness(1.06);
+        }
+
+        .miniBtn:disabled {
+            opacity: .6;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+
+        <!-- Sidebar -->
+        <div class="card">
+            <div class="cardHeader">
+                <h1 class="title">LLM → Google Maps <span class="badge">Local LLM (Ollama) + Google Maps</span></h1>
+            </div>
+
+            <div class="cardBody">
+                <label for="q">What are you looking for?</label>
+                <input id="q" placeholder='e.g. "cheap ramen near Blok M"' autocomplete="off" />
+
+                <label for="origin">Origin (optional, used for directions)</label>
+                <input id="origin" placeholder='e.g. "Lebak Bulus"' autocomplete="off" />
+
+                <div class="row">
+                    <div>
+                        <label for="mode">Travel mode</label>
+                        <select id="mode">
+                            <option value="driving" selected>Driving</option>
+                            <option value="walking">Walking</option>
+                            <option value="transit">Transit</option>
+                            <option value="bicycling">Bicycling</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="count">Max results</label>
+                        <select id="count">
+                            <option>3</option>
+                            <option selected>5</option>
+                            <option>8</option>
+                            <option>10</option>
+                        </select>
+                    </div>
+                </div>
+                <br>
+                <button id="btn" class="btn" onclick="search()">Search</button>
+
+                <div class="status" id="status">
+                    <span class="dot" id="dot"></span>
+                    <span id="statusText">Ready</span>
+                </div>
+
+                <div class="alert" id="alert"></div>
+
+                <div class="hint">
+                    Tips:
+                    <ul style="margin:8px 0 0 16px; padding:0; color: var(--muted);">
+                        <li>Use natural language: “best coffee shops in BSD”.</li>
+                        <li>Add constraints: “under 100k”, “open late”, “near MRT”.</li>
+                        <li>If origin is filled, the map shows directions automatically.</li>
+                    </ul>
+                </div>
+
+                <div class="list" id="list">
+                    <div class="empty">No results yet. Try a search!</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map -->
+        <div class="card mapCard">
+            <div class="mapHeaderRow">
+                <div>
+                    <span class="mapTitle">Map</span>
+                    <span class="mapSub" id="mapSub">Select a result to preview</span>
+                </div>
+                <div class="mapActions">
+                    <button class="miniBtn" id="openMapsBtn" disabled>Open in Google Maps</button>
+                    <button class="miniBtn" id="directionsBtn" disabled>Directions</button>
+                </div>
+            </div>
+            <iframe id="map" src=""></iframe>
+        </div>
+
+    </div>
+
+    <script>
+        let lastPlaces = [];
+        let selectedIndex = -1;
+
+        const elQ = document.getElementById('q');
+        const elOrigin = document.getElementById('origin');
+        const elMode = document.getElementById('mode');
+        const elCount = document.getElementById('count');
+        const elBtn = document.getElementById('btn');
+        const elList = document.getElementById('list');
+        const elAlert = document.getElementById('alert');
+        const elDot = document.getElementById('dot');
+        const elStatusText = document.getElementById('statusText');
+        const elMap = document.getElementById('map');
+        const elMapSub = document.getElementById('mapSub');
+        const elOpenMapsBtn = document.getElementById('openMapsBtn');
+        const elDirectionsBtn = document.getElementById('directionsBtn');
+
+        // Submit with Enter
+        [elQ, elOrigin].forEach(el => {
+            el.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') search();
+            });
+        });
+
+        function setStatus(type, text) {
+            elStatusText.textContent = text;
+            elDot.className = 'dot ' + (type || '');
+        }
+
+        function showError(msg) {
+            elAlert.style.display = 'block';
+            elAlert.textContent = msg;
+            setStatus('err', 'Error');
+        }
+
+        function clearError() {
+            elAlert.style.display = 'none';
+            elAlert.textContent = '';
+        }
+
+        function setMapUrl(url) {
+            elMap.src = url || '';
+        }
+
+        function selectPlace(idx) {
+            selectedIndex = idx;
+            const origin = elOrigin.value.trim();
+            const p = lastPlaces[idx];
+
+            // highlight
+            [...elList.querySelectorAll('.item')].forEach((node, i) => {
+                node.classList.toggle('active', i === idx);
+            });
+
+            // map source
+            const mapUrl = origin && p.embed_directions_url ? p.embed_directions_url : p.embed_place_url;
+            setMapUrl(mapUrl);
+
+            // header actions
+            elOpenMapsBtn.disabled = !p.open_in_maps_url;
+            elDirectionsBtn.disabled = !(p.directions_url && origin);
+
+            elOpenMapsBtn.onclick = () => window.open(p.open_in_maps_url, '_blank');
+            elDirectionsBtn.onclick = () => window.open(p.directions_url, '_blank');
+
+            elMapSub.textContent = `${p.name || 'Selected place'} • ${p.formatted_address || ''}`;
+        }
+
+        function renderList(places) {
+            elList.innerHTML = '';
+            if (!places || places.length === 0) {
+                elList.innerHTML = `<div class="empty">No results found. Try a different query.</div>`;
+                return;
+            }
+
+            places.forEach((p, idx) => {
+                const div = document.createElement('div');
+                div.className = 'item';
+                div.onclick = () => selectPlace(idx);
+
+                const rating = (p.rating != null)
+                    ? `★ ${p.rating}${p.user_ratings_total ? ` (${p.user_ratings_total})` : ''}`
+                    : 'No rating';
+
+                div.innerHTML = `
+          <div class="itemTop">
+            <div>
+              <p class="itemTitle">${idx + 1}. ${escapeHtml(p.name || '-')}</p>
+              <div class="itemMeta">${escapeHtml(p.formatted_address || '')}</div>
+              <div class="itemMeta">${rating}</div>
+            </div>
+            <span class="pill">Place</span>
+          </div>
+          <div class="links">
+            <a href="${p.open_in_maps_url || '#'}" target="_blank" onclick="event.stopPropagation()">Open in Maps</a>
+            ${p.directions_url ? `<a href="${p.directions_url}" target="_blank" onclick="event.stopPropagation()">Directions</a>` : ''}
+            <a href="#" onclick="event.preventDefault(); event.stopPropagation(); selectPlace(${idx});">Preview</a>
+          </div>
+        `;
+                elList.appendChild(div);
+            });
+
+            // auto-select first
+            selectPlace(0);
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, (m) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[m]));
+        }
+
+        async function search() {
+            const question = elQ.value.trim();
+            const origin = elOrigin.value.trim() || null;
+            const mode = elMode.value;
+            const count = parseInt(elCount.value, 10);
+
+            if (!question) {
+                alert("Please enter a search query.");
+                return;
+            }
+
+            clearError();
+            elBtn.disabled = true;
+            setStatus('loading', 'Searching...');
+            elMapSub.textContent = 'Searching…';
+
+            try {
+                const res = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question, origin, count, mode })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    showError(data?.detail ? JSON.stringify(data.detail, null, 2) : "Unknown server error.");
+                    elBtn.disabled = false;
+                    return;
+                }
+
+                const places = data?.results?.places || [];
+                lastPlaces = places;
+
+                renderList(places);
+                setStatus('ok', `Done • ${places.length} result(s)`);
+
+            } catch (err) {
+                showError(String(err));
+            } finally {
+                elBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+
+</html>
