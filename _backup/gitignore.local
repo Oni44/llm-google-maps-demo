@@ -21,3 +21,7 @@ Thumbs.db
 # FastAPI / cache
 .pytest_cache/
 .mypy_cache/
+
+# backup
+_backup/
+._backup/
